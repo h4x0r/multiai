@@ -9,7 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Node.js
+node_modules/
+frontend/node_modules/
 
 # Added by cargo
-
 /target
