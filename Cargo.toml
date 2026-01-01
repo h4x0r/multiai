@@ -1,0 +1,60 @@
+[package]
+name = "freetier"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance local API gateway for free LLMs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging/tracing (Wireshark-style)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Async utilities
+tokio-util = "0.7"
+futures = "0.3"
+
+# Cache
+moka = { version = "0.12", features = ["future"] }
+
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Configuration
+toml = "0.8"
+dirs = "5"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+axum-test = "18"
+mockito = "1"
+pretty_assertions = "1"
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
