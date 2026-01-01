@@ -4,10 +4,12 @@ function MessageInput(props) {
   const [content, setContent] = createSignal('');
   let textareaRef;
 
+  const isDisabled = () => props.isStreaming || props.disabled;
+
   function handleSubmit(e) {
     e?.preventDefault();
     const text = content().trim();
-    if (text && !props.isStreaming) {
+    if (text && !isDisabled()) {
       props.onSend(text);
       setContent('');
       if (textareaRef) {
@@ -32,15 +34,22 @@ function MessageInput(props) {
   }
 
   return (
-    <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+    <div class={`border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 ${
+      props.disabled ? 'opacity-60' : ''
+    }`}>
       <div class="max-w-3xl mx-auto">
         <form onSubmit={handleSubmit} class="relative">
-          <div class="flex items-end gap-2 bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
+          <div class={`flex items-end gap-2 bg-gray-50 dark:bg-gray-900 rounded-xl border ${
+            props.disabled
+              ? 'border-gray-300 dark:border-gray-600'
+              : 'border-gray-200 dark:border-gray-700 focus-within:border-accent focus-within:ring-1 focus-within:ring-accent'
+          }`}>
             {/* Attachment button */}
             <button
               type="button"
-              class="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              class="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title="Attach file"
+              disabled={props.disabled}
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -53,10 +62,10 @@ function MessageInput(props) {
               value={content()}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Message... (⌘↩ to send)"
+              placeholder={props.disabled ? "No models available..." : "Message... (⌘↩ to send)"}
               rows="1"
-              class="flex-1 py-3 pr-3 bg-transparent resize-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm max-h-48"
-              disabled={props.isStreaming}
+              class="flex-1 py-3 pr-3 bg-transparent resize-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm max-h-48 disabled:cursor-not-allowed"
+              disabled={isDisabled()}
             />
 
             {/* Send/Stop button */}
@@ -77,13 +86,13 @@ function MessageInput(props) {
             >
               <button
                 type="submit"
-                disabled={!content().trim()}
+                disabled={!content().trim() || props.disabled}
                 class={`m-2 p-2 rounded-lg transition-colors ${
-                  content().trim()
+                  content().trim() && !props.disabled
                     ? 'bg-accent hover:bg-accent-hover text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                 }`}
-                title="Send (⌘↩)"
+                title={props.disabled ? "No models available" : "Send (⌘↩)"}
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
@@ -92,11 +101,20 @@ function MessageInput(props) {
             </Show>
           </div>
 
-          {/* Keyboard hint */}
+          {/* Keyboard hint or disabled message */}
           <div class="mt-2 text-center">
-            <span class="text-xs text-gray-400">
-              Press <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">⌘</kbd> + <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">↩</kbd> to send
-            </span>
+            <Show
+              when={!props.disabled}
+              fallback={
+                <span class="text-xs text-amber-600 dark:text-amber-400">
+                  Messaging disabled - no AI models available
+                </span>
+              }
+            >
+              <span class="text-xs text-gray-400">
+                Press <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">⌘</kbd> + <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">↩</kbd> to send
+              </span>
+            </Show>
           </div>
         </form>
       </div>

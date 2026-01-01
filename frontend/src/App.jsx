@@ -13,10 +13,15 @@ function App() {
   const [messages, setMessages] = createSignal([]);
   const [isStreaming, setIsStreaming] = createSignal(false);
   const [streamingContent, setStreamingContent] = createSignal('');
+  const [modelsAvailable, setModelsAvailable] = createSignal(null); // null = loading, true/false = checked
+  const [modelCount, setModelCount] = createSignal(0);
 
-  // Load chats on mount
+  // Load chats and check models on mount
   onMount(async () => {
-    await loadChats();
+    await Promise.all([
+      loadChats(),
+      checkModels()
+    ]);
     if (params.id) {
       await loadChat(params.id);
     }
@@ -28,6 +33,19 @@ function App() {
       await loadChat(params.id);
     }
   });
+
+  async function checkModels() {
+    try {
+      const res = await fetch('/v1/models');
+      const data = await res.json();
+      const count = data.data?.length || 0;
+      setModelCount(count);
+      setModelsAvailable(count > 0);
+    } catch (err) {
+      console.error('Failed to check models:', err);
+      setModelsAvailable(false);
+    }
+  }
 
   async function loadChats() {
     try {
@@ -89,6 +107,18 @@ function App() {
   async function sendMessage(content) {
     if (!content.trim() || isStreaming()) return;
 
+    // Check if models are available before sending
+    if (modelsAvailable() === false) {
+      setMessages(prev => [...prev, {
+        id: 'error-' + Date.now(),
+        role: 'assistant',
+        content: 'No free AI models are currently available. Please check back later or configure your API keys.',
+        created_at: new Date().toISOString(),
+        isError: true
+      }]);
+      return;
+    }
+
     let chatId = currentChat()?.id;
 
     // Create a new chat if we don't have one
@@ -124,7 +154,7 @@ function App() {
       return;
     }
 
-    // Get AI response via streaming
+    // Get AI response
     setIsStreaming(true);
     setStreamingContent('');
 
@@ -142,7 +172,7 @@ function App() {
         body: JSON.stringify({
           model: 'auto',
           messages: apiMessages,
-          stream: false // For now, non-streaming
+          stream: false
         })
       });
 
@@ -154,21 +184,37 @@ function App() {
                                  'No response';
 
         // Save assistant message to database
-        const saveRes = await fetch(`/api/chats/${chatId}/messages`, {
+        await fetch(`/api/chats/${chatId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: assistantContent })
         });
 
-        // Reload messages from server to get correct message with assistant role
+        // Reload messages from server
         await loadChat(chatId);
       } else if (data.error) {
-        // Show error as assistant message
+        // Parse specific error types
+        let errorMessage = data.error.message;
+        let isNoModels = false;
+
+        if (data.error.type === 'service_unavailable' ||
+            errorMessage.toLowerCase().includes('no free models') ||
+            errorMessage.toLowerCase().includes('no models available')) {
+          errorMessage = 'No free AI models are currently available. The providers may be experiencing issues or all free tiers are exhausted. Please try again later.';
+          isNoModels = true;
+          setModelsAvailable(false);
+        } else if (data.error.type === 'configuration_error') {
+          errorMessage = 'API key not configured. Please set your OPENROUTER_API_KEY or OPENCODE_ZEN_API_KEY environment variable.';
+        } else if (data.error.type === 'upstream_error') {
+          errorMessage = `The AI provider returned an error: ${data.error.message}. Please try again.`;
+        }
+
         setMessages(prev => [...prev, {
           id: 'error-' + Date.now(),
           role: 'assistant',
-          content: `Error: ${data.error.message}`,
-          created_at: new Date().toISOString()
+          content: errorMessage,
+          created_at: new Date().toISOString(),
+          isError: true
         }]);
       }
     } catch (err) {
@@ -176,19 +222,19 @@ function App() {
       setMessages(prev => [...prev, {
         id: 'error-' + Date.now(),
         role: 'assistant',
-        content: `Error: ${err.message}`,
-        created_at: new Date().toISOString()
+        content: `Connection error: ${err.message}. Please check your internet connection and try again.`,
+        created_at: new Date().toISOString(),
+        isError: true
       }]);
     } finally {
       setIsStreaming(false);
       setStreamingContent('');
-      await loadChats(); // Refresh chat list for updated timestamp
+      await loadChats();
     }
   }
 
   function stopStreaming() {
     setIsStreaming(false);
-    // TODO: Implement actual stream cancellation
   }
 
   return (
@@ -205,11 +251,55 @@ function App() {
       {/* Main content */}
       <div class="flex-1 flex flex-col">
         {/* Header */}
-        <header class="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+        <header class="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <h1 class="text-sm font-medium text-gray-600 dark:text-gray-300">
             {currentChat()?.title || 'FreeTier AI'}
           </h1>
+
+          {/* Model status indicator */}
+          <Show when={modelsAvailable() !== null}>
+            <div class={`flex items-center gap-1.5 text-xs ${
+              modelsAvailable() ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+            }`}>
+              <span class={`w-2 h-2 rounded-full ${
+                modelsAvailable() ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+              }`} />
+              {modelsAvailable()
+                ? `${modelCount()} model${modelCount() !== 1 ? 's' : ''} available`
+                : 'No models available'
+              }
+              <button
+                onClick={checkModels}
+                class="ml-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Refresh"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+          </Show>
         </header>
+
+        {/* No models warning banner */}
+        <Show when={modelsAvailable() === false}>
+          <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-3">
+            <div class="flex items-start gap-3 max-w-3xl mx-auto">
+              <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div class="flex-1">
+                <h3 class="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  No Free AI Models Available
+                </h3>
+                <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                  All free tier quotas may be exhausted, or the providers are experiencing issues.
+                  You can still view your chat history. Check back later.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Show>
 
         {/* Chat area */}
         <ChatView
@@ -223,6 +313,7 @@ function App() {
           onSend={sendMessage}
           isStreaming={isStreaming()}
           onStop={stopStreaming}
+          disabled={modelsAvailable() === false}
         />
       </div>
     </div>
