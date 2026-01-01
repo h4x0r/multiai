@@ -16,6 +16,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::chat::ChatDb;
 use crate::chat_api::{create_chat_router, ChatState};
@@ -50,6 +51,10 @@ pub fn create_router() -> Router {
 pub fn create_router_with_state(state: AppState) -> Router {
     let chat_router = create_chat_router(state.chat.clone());
 
+    // Serve static files from the static directory
+    let static_service = ServeDir::new("static")
+        .not_found_service(ServeFile::new("static/index.html"));
+
     Router::new()
         .route("/health", get(health_check))
         .route("/v1/models", get(list_models))
@@ -58,6 +63,7 @@ pub fn create_router_with_state(state: AppState) -> Router {
         .route("/v1/inspect", delete(clear_inspect))
         .with_state(Arc::new(state))
         .merge(chat_router)
+        .fallback_service(static_service)
 }
 
 // ============================================================================
