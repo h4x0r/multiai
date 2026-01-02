@@ -82,7 +82,7 @@ pub enum LogVerbosity {
 }
 
 // Default value functions
-fn default_port() -> u16 { 8080 }
+fn default_port() -> u16 { 11434 }
 fn default_true() -> bool { true }
 fn default_log_folder() -> PathBuf {
     dirs::data_local_dir()

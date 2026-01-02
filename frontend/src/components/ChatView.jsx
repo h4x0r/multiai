@@ -43,10 +43,10 @@ function WelcomeMessage() {
         </svg>
       </div>
       <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
-        Welcome to FreeTier AI
+        Welcome to MultiAI
       </h2>
       <p class="text-gray-500 dark:text-gray-400 max-w-md">
-        Chat with free AI models. Ask questions, get help with code, or just have a conversation.
+        Compare answers from multiple free AI models side by side. No subscriptions, no limits.
       </p>
     </div>
   );

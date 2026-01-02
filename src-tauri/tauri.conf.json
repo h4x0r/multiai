@@ -5,13 +5,14 @@
   "identifier": "ai.multiai.desktop",
   "build": {
     "devUrl": "http://localhost:11434",
-    "frontendDist": "../static"
+    "frontendDist": "dist"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "MultiAI",
-        "url": "http://localhost:11434",
+        "url": "/",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -36,7 +37,7 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
-    "shortDescription": "Every answer, every angle",
+    "shortDescription": "Compare AI answers side by side",
     "longDescription": "MultiAI lets you compare multiple free AI models side by side. Send one question, get answers from different models simultaneously.",
     "macOS": {
       "minimumSystemVersion": "10.15"

@@ -54,6 +54,10 @@ quick-xml = "0.37"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 
+# Embed static files
+rust-embed = "8"
+mime_guess = "2"
+
 [dev-dependencies]
 tokio-test = "0.4"
 axum-test = "18"

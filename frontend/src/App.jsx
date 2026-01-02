@@ -3,6 +3,7 @@ import { useParams, useNavigate } from '@solidjs/router';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import MessageInput from './components/MessageInput';
+import ModelSelector from './components/ModelSelector';
 
 function App() {
   const params = useParams();
@@ -16,6 +17,8 @@ function App() {
   const [modelsAvailable, setModelsAvailable] = createSignal(null); // null = loading, true/false = checked
   const [modelCount, setModelCount] = createSignal(0);
   const [showExportMenu, setShowExportMenu] = createSignal(false);
+  const [selectedModel, setSelectedModel] = createSignal({ id: 'auto', source: null });
+  const [configuredProviders, setConfiguredProviders] = createSignal({ openCodeZen: true, openRouter: true });
 
   // Load chats and check models on mount
   onMount(async () => {
@@ -171,7 +174,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'auto',
+          model: selectedModel().id || 'auto',
           messages: apiMessages,
           stream: false
         })
@@ -236,6 +239,10 @@ function App() {
 
   function stopStreaming() {
     setIsStreaming(false);
+  }
+
+  function handleModelSelect(modelId, source) {
+    setSelectedModel({ id: modelId, source });
   }
 
   async function uploadFile(file) {
@@ -313,6 +320,15 @@ function App() {
           </h1>
 
           <div class="flex items-center gap-3">
+            {/* Model selector */}
+            <Show when={modelsAvailable() === true}>
+              <ModelSelector
+                onSelect={handleModelSelect}
+                configuredProviders={configuredProviders()}
+                onConfigureProvider={(provider) => console.log('Configure:', provider)}
+              />
+            </Show>
+
             {/* Model status indicator */}
             <Show when={modelsAvailable() !== null}>
               <div class={`flex items-center gap-1.5 text-xs ${

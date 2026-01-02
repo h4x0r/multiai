@@ -87,7 +87,7 @@ function Sidebar(props) {
       {/* Footer */}
       <div class="p-3 border-t border-gray-200 dark:border-gray-700">
         <div class="text-xs text-gray-500 dark:text-gray-400 text-center">
-          FreeTier v0.1.0
+          MultiAI v0.1.0
         </div>
       </div>
     </aside>

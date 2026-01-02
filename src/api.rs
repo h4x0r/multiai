@@ -8,15 +8,20 @@
 //! - DELETE /v1/inspect - Clear captured transactions
 
 use axum::{
-    extract::{Query, State},
-    http::StatusCode,
+    extract::{Path, Query, State},
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
 };
+use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::cors::{Any, CorsLayer};
+
+#[derive(Embed)]
+#[folder = "static/"]
+struct StaticAssets;
 
 use crate::chat::ChatDb;
 use crate::chat_api::{create_chat_router, ChatState};
@@ -51,9 +56,11 @@ pub fn create_router() -> Router {
 pub fn create_router_with_state(state: AppState) -> Router {
     let chat_router = create_chat_router(state.chat.clone());
 
-    // Serve static files from the static directory
-    let static_service = ServeDir::new("static")
-        .not_found_service(ServeFile::new("static/index.html"));
+    // Allow CORS for Tauri loading page
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     Router::new()
         .route("/health", get(health_check))
@@ -64,7 +71,32 @@ pub fn create_router_with_state(state: AppState) -> Router {
         .route("/v1/inspect", delete(clear_inspect))
         .with_state(Arc::new(state))
         .merge(chat_router)
-        .fallback_service(static_service)
+        .fallback(static_handler)
+        .layer(cors)
+}
+
+/// Serve embedded static files
+async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
+    let path = if path.is_empty() { "index.html" } else { path };
+
+    match StaticAssets::get(path) {
+        Some(content) => {
+            let mime = mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string();
+            ([(header::CONTENT_TYPE, mime)], content.data.into_owned()).into_response()
+        }
+        None => {
+            // Fallback to index.html for SPA routing
+            match StaticAssets::get("index.html") {
+                Some(content) => {
+                    ([(header::CONTENT_TYPE, "text/html".to_string())], content.data.into_owned()).into_response()
+                }
+                None => (StatusCode::NOT_FOUND, "Not Found").into_response(),
+            }
+        }
+    }
 }
 
 // ============================================================================
