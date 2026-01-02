@@ -8,10 +8,12 @@
 //! - PATCH /api/chats/:id - Update chat title
 //! - POST /api/chats/:id/messages - Send message
 //! - DELETE /api/chats/:id/messages/:mid - Delete message
+//! - POST /api/chats/:id/upload - Upload document (PDF, DOCX, TXT)
+//! - GET /api/chats/:id/export - Export chat (PDF, DOCX, MD)
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{Multipart, Path, Query, State},
+    http::{header, StatusCode},
     response::IntoResponse,
     routing::{delete, get, patch, post},
     Json, Router,
@@ -20,6 +22,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 use crate::chat::{ChatDb, MessageRole};
+use crate::document::{extract_text, DocumentType};
+use crate::export::{export_chat, ExportChat, ExportFormat, ExportMessage};
 
 /// Shared chat database state.
 pub struct ChatState {
@@ -42,6 +46,8 @@ pub fn create_chat_router(state: Arc<ChatState>) -> Router<()> {
         .route("/api/chats/{id}", patch(update_chat))
         .route("/api/chats/{id}/messages", post(send_message))
         .route("/api/chats/{id}/messages/{mid}", delete(delete_message))
+        .route("/api/chats/{id}/upload", post(upload_document))
+        .route("/api/chats/{id}/export", get(export_chat_handler))
         .with_state(state)
 }
 
@@ -114,6 +120,22 @@ struct DeleteResponse {
 #[derive(Serialize)]
 struct ErrorResponse {
     error: String,
+}
+
+#[derive(Serialize)]
+struct UploadResponse {
+    id: String,
+    role: String,
+    content: String,
+    filename: String,
+    doc_type: String,
+    word_count: usize,
+    created_at: String,
+}
+
+#[derive(Deserialize)]
+struct ExportQuery {
+    format: Option<String>,
 }
 
 // ============================================================================
@@ -373,6 +395,235 @@ async fn delete_message(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
                 error: e.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+async fn upload_document(
+    State(state): State<Arc<ChatState>>,
+    Path(chat_id): Path<String>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    // Verify chat exists
+    {
+        let db = state.db.lock().unwrap();
+        match db.get_chat(&chat_id) {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: "Chat not found".to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: e.to_string(),
+                    }),
+                )
+                    .into_response()
+            }
+        }
+    }
+
+    // Process multipart form
+    let mut file_data: Option<(String, Vec<u8>)> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
+        if name == "file" {
+            let filename = field.file_name().unwrap_or("unknown").to_string();
+            match field.bytes().await {
+                Ok(data) => {
+                    file_data = Some((filename, data.to_vec()));
+                    break;
+                }
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: format!("Failed to read file: {}", e),
+                        }),
+                    )
+                        .into_response()
+                }
+            }
+        }
+    }
+
+    let (filename, data) = match file_data {
+        Some(f) => f,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "No file provided".to_string(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Detect document type from extension
+    let extension = filename
+        .rsplit('.')
+        .next()
+        .unwrap_or("");
+
+    let doc_type = match DocumentType::from_extension(extension) {
+        Some(dt) => dt,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("Unsupported file type: .{}", extension),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Extract text from document
+    let extracted = match extract_text(&data, doc_type) {
+        Ok(doc) => doc,
+        Err(e) => {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ErrorResponse {
+                    error: format!("Failed to extract text: {}", e),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Create message with extracted text
+    let msg_id = uuid::Uuid::new_v4().to_string();
+    let content = format!(
+        "[Uploaded: {}]\n\n{}",
+        filename,
+        extracted.text
+    );
+
+    let db = state.db.lock().unwrap();
+    match db.add_message(&msg_id, &chat_id, MessageRole::User, &content) {
+        Ok(message) => (
+            StatusCode::CREATED,
+            Json(UploadResponse {
+                id: message.id,
+                role: message.role.to_string(),
+                content: message.content,
+                filename,
+                doc_type: format!("{:?}", doc_type),
+                word_count: extracted.word_count,
+                created_at: message.created_at.to_rfc3339(),
+            }),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+            .into_response(),
+    }
+}
+
+async fn export_chat_handler(
+    State(state): State<Arc<ChatState>>,
+    Path(chat_id): Path<String>,
+    Query(query): Query<ExportQuery>,
+) -> impl IntoResponse {
+    let db = state.db.lock().unwrap();
+
+    // Get chat
+    let chat = match db.get_chat(&chat_id) {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: "Chat not found".to_string(),
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Get messages
+    let messages = db.get_messages(&chat_id).unwrap_or_default();
+
+    // Determine format
+    let format_str = query.format.as_deref().unwrap_or("md");
+    let format = match ExportFormat::from_extension(format_str) {
+        Some(f) => f,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("Unsupported format: {}. Use pdf, docx, or md", format_str),
+                }),
+            )
+                .into_response()
+        }
+    };
+
+    // Build export chat structure
+    let export = ExportChat {
+        title: chat.title.clone(),
+        created_at: chat.created_at.to_rfc3339(),
+        messages: messages
+            .into_iter()
+            .map(|m| ExportMessage {
+                role: m.role.to_string(),
+                content: m.content,
+                created_at: m.created_at.to_rfc3339(),
+            })
+            .collect(),
+    };
+
+    // Generate export
+    match export_chat(&export, format) {
+        Ok(data) => {
+            let filename = format!(
+                "{}.{}",
+                chat.title.chars().take(50).collect::<String>().replace(' ', "_"),
+                format.extension()
+            );
+
+            (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, format.content_type()),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        &format!("attachment; filename=\"{}\"", filename),
+                    ),
+                ],
+                data,
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: format!("Export failed: {}", e),
             }),
         )
             .into_response(),
@@ -642,5 +893,216 @@ mod tests {
 
         assert_eq!(chats.len(), 2);
         assert_eq!(chats[0]["title"], "First Updated"); // Most recently updated
+    }
+
+    // =========================================================================
+    // Upload Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn upload_text_file_creates_message() {
+        use axum_test::multipart::{MultipartForm, Part};
+
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat
+        let create_response = server.post("/api/chats").json(&json!({})).await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Upload text file
+        let part = Part::bytes(b"Hello from uploaded file!".to_vec())
+            .file_name("test.txt")
+            .mime_type("text/plain");
+        let form = MultipartForm::new().add_part("file", part);
+
+        let response = server
+            .post(&format!("/api/chats/{}/upload", chat_id))
+            .multipart(form)
+            .await;
+
+        response.assert_status(StatusCode::CREATED);
+        let body: serde_json::Value = response.json();
+        assert!(body["content"].as_str().unwrap().contains("Hello from uploaded file!"));
+        assert_eq!(body["doc_type"], "Text");
+    }
+
+    #[tokio::test]
+    async fn upload_to_nonexistent_chat_returns_404() {
+        use axum_test::multipart::{MultipartForm, Part};
+
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        let part = Part::bytes(b"Hello".to_vec())
+            .file_name("test.txt")
+            .mime_type("text/plain");
+        let form = MultipartForm::new().add_part("file", part);
+
+        let response = server
+            .post("/api/chats/nonexistent/upload")
+            .multipart(form)
+            .await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn upload_unsupported_file_returns_error() {
+        use axum_test::multipart::{MultipartForm, Part};
+
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat
+        let create_response = server.post("/api/chats").json(&json!({})).await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Upload unsupported file type
+        let part = Part::bytes(b"binary data".to_vec())
+            .file_name("image.jpg")
+            .mime_type("image/jpeg");
+        let form = MultipartForm::new().add_part("file", part);
+
+        let response = server
+            .post(&format!("/api/chats/{}/upload", chat_id))
+            .multipart(form)
+            .await;
+
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = response.json();
+        assert!(body["error"].as_str().unwrap().contains("Unsupported"));
+    }
+
+    // =========================================================================
+    // Export Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn export_chat_as_markdown() {
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat with message
+        let create_response = server
+            .post("/api/chats")
+            .json(&json!({"title": "Export Test"}))
+            .await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        server
+            .post(&format!("/api/chats/{}/messages", chat_id))
+            .json(&json!({"content": "Hello world"}))
+            .await;
+
+        // Export as markdown
+        let response = server
+            .get(&format!("/api/chats/{}/export?format=md", chat_id))
+            .await;
+
+        response.assert_status_ok();
+        let body = response.text();
+        assert!(body.contains("# Export Test"));
+        assert!(body.contains("Hello world"));
+    }
+
+    #[tokio::test]
+    async fn export_chat_as_pdf() {
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat
+        let create_response = server
+            .post("/api/chats")
+            .json(&json!({"title": "PDF Test"}))
+            .await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Export as PDF
+        let response = server
+            .get(&format!("/api/chats/{}/export?format=pdf", chat_id))
+            .await;
+
+        response.assert_status_ok();
+        let body = response.as_bytes();
+        assert!(body.starts_with(b"%PDF-1.4"));
+    }
+
+    #[tokio::test]
+    async fn export_chat_as_docx() {
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat
+        let create_response = server
+            .post("/api/chats")
+            .json(&json!({"title": "DOCX Test"}))
+            .await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Export as DOCX
+        let response = server
+            .get(&format!("/api/chats/{}/export?format=docx", chat_id))
+            .await;
+
+        response.assert_status_ok();
+        let body = response.as_bytes();
+        // DOCX is a ZIP file
+        assert_eq!(&body[0..4], b"PK\x03\x04");
+    }
+
+    #[tokio::test]
+    async fn export_nonexistent_chat_returns_404() {
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/api/chats/nonexistent/export").await;
+
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn export_invalid_format_returns_error() {
+        let state = test_state();
+        let app = create_chat_router(state);
+        let server = TestServer::new(app).unwrap();
+
+        // Create chat
+        let create_response = server.post("/api/chats").json(&json!({})).await;
+        let chat_id = create_response.json::<serde_json::Value>()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Try invalid format
+        let response = server
+            .get(&format!("/api/chats/{}/export?format=xyz", chat_id))
+            .await;
+
+        response.assert_status(StatusCode::BAD_REQUEST);
+        let body: serde_json::Value = response.json();
+        assert!(body["error"].as_str().unwrap().contains("Unsupported format"));
     }
 }

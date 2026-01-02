@@ -1,12 +1,12 @@
 [package]
-name = "freetier"
+name = "multiai"
 version = "0.1.0"
 edition = "2021"
-description = "High-performance local API gateway for free LLMs"
+description = "Compare multiple free AI models side by side"
 
 [dependencies]
 # Web framework
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
@@ -35,12 +35,20 @@ futures = "0.3"
 # Cache
 moka = { version = "0.12", features = ["future"] }
 
+# HTML parsing
+scraper = "0.22"
+
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 # Configuration
 toml = "0.8"
 dirs = "5"
+
+# Document processing
+pdf-extract = "0.8"
+zip = "2"
+quick-xml = "0.37"
 
 # CLI
 clap = { version = "4", features = ["derive"] }

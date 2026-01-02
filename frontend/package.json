@@ -1,7 +1,7 @@
 {
-  "name": "freetier-ui",
+  "name": "multiai-ui",
   "version": "1.0.0",
-  "description": "FreeTier Chat UI",
+  "description": "MultiAI - Every answer, every angle",
   "type": "module",
   "scripts": {
     "dev": "vite",

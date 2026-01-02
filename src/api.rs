@@ -58,6 +58,7 @@ pub fn create_router_with_state(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health_check))
         .route("/v1/models", get(list_models))
+        .route("/v1/models/grouped", get(list_models_grouped))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/inspect", get(get_inspect))
         .route("/v1/inspect", delete(clear_inspect))
@@ -79,6 +80,24 @@ struct HealthResponse {
 struct ModelsResponse {
     object: &'static str,
     data: Vec<ModelInfo>,
+}
+
+#[derive(Serialize)]
+struct GroupedModelsResponse {
+    models: Vec<GroupedModel>,
+}
+
+#[derive(Serialize)]
+struct GroupedModel {
+    name: String,
+    providers: Vec<ProviderOption>,
+}
+
+#[derive(Serialize)]
+struct ProviderOption {
+    id: String,
+    source: Source,
+    endpoint: String,
 }
 
 #[derive(Serialize)]
@@ -169,6 +188,76 @@ async fn list_models(State(state): State<Arc<AppState>>) -> Json<ModelsResponse>
     })
 }
 
+async fn list_models_grouped(State(state): State<Arc<AppState>>) -> Json<GroupedModelsResponse> {
+    use std::collections::HashMap;
+
+    let free_models = state.scanner.get_free_models(false).await;
+
+    // Group models by normalized name
+    let mut grouped: HashMap<String, Vec<ProviderOption>> = HashMap::new();
+
+    for model in free_models {
+        // Normalize model name: "glm-4-7-free" -> "GLM 4.7"
+        let name = normalize_model_name(&model.id);
+
+        grouped.entry(name).or_default().push(ProviderOption {
+            id: model.id,
+            source: model.source,
+            endpoint: model.endpoint,
+        });
+    }
+
+    // Convert to vec and sort providers (Zen first)
+    let mut models: Vec<GroupedModel> = grouped
+        .into_iter()
+        .map(|(name, mut providers)| {
+            // Sort: OpenCodeZen first, then OpenRouter
+            providers.sort_by(|a, b| {
+                match (&a.source, &b.source) {
+                    (Source::OpenCodeZen, Source::OpenRouter) => std::cmp::Ordering::Less,
+                    (Source::OpenRouter, Source::OpenCodeZen) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                }
+            });
+            GroupedModel { name, providers }
+        })
+        .collect();
+
+    // Sort models alphabetically by name
+    models.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Json(GroupedModelsResponse { models })
+}
+
+/// Normalize model ID to display name.
+/// "glm-4-7-free" -> "GLM 4.7", "grok-code-fast-1" -> "Grok Code Fast 1"
+fn normalize_model_name(id: &str) -> String {
+    let name = id
+        .replace("-free", "")
+        .replace("opencode/", "")
+        .replace("openrouter/", "");
+
+    // Split by hyphens and title case
+    name.split('-')
+        .map(|part| {
+            // Handle version numbers like "4.7" or "4-7"
+            if part.chars().all(|c| c.is_ascii_digit()) {
+                part.to_string()
+            } else {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().chain(chars).collect(),
+                }
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" 4 7", " 4.7")  // Fix version formatting
+        .replace(" 2 1", " 2.1")
+        .replace(" 5 ", " 5")
+}
+
 async fn chat_completions(
     State(state): State<Arc<AppState>>,
     Json(request): Json<ChatRequest>,
@@ -238,7 +327,7 @@ async fn chat_completions(
     // Get API key from environment
     let api_key = match target.source {
         Source::OpenRouter => std::env::var("OPENROUTER_API_KEY").ok(),
-        Source::ModelsDev => std::env::var("OPENCODE_ZEN_API_KEY").ok(),
+        Source::OpenCodeZen => std::env::var("OPENCODE_ZEN_API_KEY").ok(),
     };
 
     let api_key = match api_key {
@@ -517,5 +606,38 @@ mod tests {
         // Either succeeds, 503 (no models), or 503 (no API key)
         let status = response.status_code();
         assert!(status.is_success() || status.as_u16() == 503);
+    }
+
+    #[tokio::test]
+    async fn grouped_models_returns_models_by_name() {
+        let app = create_router();
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/v1/models/grouped").await;
+
+        response.assert_status_ok();
+        let body: serde_json::Value = response.json();
+
+        // Should return grouped structure
+        assert!(body["models"].is_array());
+
+        // Each model should have name and providers array
+        if let Some(models) = body["models"].as_array() {
+            for model in models {
+                assert!(model["name"].is_string(), "Model should have name");
+                assert!(model["providers"].is_array(), "Model should have providers array");
+
+                // Providers should be sorted with Zen first
+                if let Some(providers) = model["providers"].as_array() {
+                    if providers.len() > 1 {
+                        // If multiple providers, Zen should be first
+                        let first_source = providers[0]["source"].as_str().unwrap_or("");
+                        if providers.iter().any(|p| p["source"] == "open_code_zen") {
+                            assert_eq!(first_source, "open_code_zen", "Zen should be listed first");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

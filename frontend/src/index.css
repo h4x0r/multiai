@@ -53,3 +53,144 @@
   --color-accent: rgb(0, 122, 255);
   --color-accent-hover: rgb(0, 102, 204);
 }
+
+/* ============================================
+   Model Selector Animations
+   ============================================ */
+
+/* Mobile bottom sheet slide-up animation */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Dropdown fade-in animation */
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-dropdown-in {
+  animation: dropdownIn 0.15s ease-out;
+}
+
+/* ============================================
+   Onboarding Banner Animations
+   ============================================ */
+
+@keyframes bannerSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-banner-in {
+  animation: bannerSlideDown 0.3s ease-out;
+}
+
+/* ============================================
+   Wizard Step Transitions
+   ============================================ */
+
+@keyframes stepFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-step-in {
+  animation: stepFadeIn 0.2s ease-out;
+}
+
+/* ============================================
+   Focus Styles (WCAG 2.1 AA Compliant)
+   ============================================ */
+
+/* High contrast focus ring for keyboard navigation */
+.focus-visible-ring:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--color-accent),
+    0 0 0 4px rgba(0, 122, 255, 0.3);
+}
+
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  z-index: 9999;
+  padding: 0.5rem 1rem;
+  background: var(--color-accent);
+  color: white;
+  text-decoration: none;
+  border-radius: 0 0 0.25rem 0;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* ============================================
+   Touch Device Optimizations
+   ============================================ */
+
+/* Larger touch targets on touch devices */
+@media (pointer: coarse) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Remove hover effects that cause sticky states on touch */
+  .no-touch-hover:hover {
+    background-color: inherit;
+  }
+}
+
+/* ============================================
+   Reduced Motion Preferences
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .animate-slide-up,
+  .animate-dropdown-in,
+  .animate-banner-in,
+  .animate-step-in {
+    animation: none;
+  }
+}

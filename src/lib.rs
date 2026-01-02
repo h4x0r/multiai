@@ -11,6 +11,8 @@ pub mod api;
 pub mod chat;
 pub mod chat_api;
 pub mod config;
+pub mod document;
+pub mod export;
 pub mod inspector;
 pub mod logger;
 pub mod scanner;

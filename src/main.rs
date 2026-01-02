@@ -1,15 +1,15 @@
-//! FreeTier CLI - High-performance local API gateway for free LLMs.
+//! MultiAI CLI - Compare multiple free AI models side by side.
 
 use clap::{Parser, Subcommand};
-use freetier::api::{create_router_with_state, AppState};
-use freetier::config::{Config, LogVerbosity};
+use multiai::api::{create_router_with_state, AppState};
+use multiai::config::{Config, LogVerbosity};
 use std::net::SocketAddr;
 use tokio::signal;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 #[derive(Parser)]
-#[command(name = "freetier")]
-#[command(about = "High-performance local API gateway for free LLMs")]
+#[command(name = "multiai")]
+#[command(about = "Compare multiple free AI models side by side")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -117,15 +117,15 @@ async fn run_server(
     let verbosity: LogVerbosity = log_level.into();
     match verbosity {
         LogVerbosity::Minimal => {
-            println!("freetier:{}", port);
+            println!("multiai:{}", port);
         }
         LogVerbosity::Compact => {
-            println!("→ FreeTier gateway starting on http://{}", addr);
+            println!("→ MultiAI starting on http://{}", addr);
             println!("→ OpenAI-compatible API: http://{}/v1", addr);
         }
         LogVerbosity::Verbose => {
             println!("────────────────────────────────────────");
-            println!("FreeTier v{}", env!("CARGO_PKG_VERSION"));
+            println!("MultiAI v{}", env!("CARGO_PKG_VERSION"));
             println!("────────────────────────────────────────");
             println!("Gateway:    http://{}", addr);
             println!("API Base:   http://{}/v1", addr);

@@ -15,6 +15,7 @@ function App() {
   const [streamingContent, setStreamingContent] = createSignal('');
   const [modelsAvailable, setModelsAvailable] = createSignal(null); // null = loading, true/false = checked
   const [modelCount, setModelCount] = createSignal(0);
+  const [showExportMenu, setShowExportMenu] = createSignal(false);
 
   // Load chats and check models on mount
   onMount(async () => {
@@ -237,6 +238,61 @@ function App() {
     setIsStreaming(false);
   }
 
+  async function uploadFile(file) {
+    let chatId = currentChat()?.id;
+
+    // Create a new chat if we don't have one
+    if (!chatId) {
+      try {
+        const res = await fetch('/api/chats', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: `Document: ${file.name}` })
+        });
+        const data = await res.json();
+        chatId = data.id;
+        await loadChats();
+        navigate(`/chat/${chatId}`);
+        setCurrentChat({ id: chatId, title: `Document: ${file.name}` });
+      } catch (err) {
+        throw new Error('Failed to create chat for upload');
+      }
+    }
+
+    // Upload the file
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`/api/chats/${chatId}/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    // Reload chat to show the uploaded document
+    await loadChat(chatId);
+    await loadChats();
+  }
+
+  function exportChat(format) {
+    const chatId = currentChat()?.id;
+    if (!chatId) return;
+
+    // Create download link and trigger download
+    const url = `/api/chats/${chatId}/export?format=${format}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentChat()?.title || 'chat'}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  }
+
   return (
     <div class="h-screen flex bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
@@ -253,33 +309,88 @@ function App() {
         {/* Header */}
         <header class="h-12 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
           <h1 class="text-sm font-medium text-gray-600 dark:text-gray-300">
-            {currentChat()?.title || 'FreeTier AI'}
+            {currentChat()?.title || 'MultiAI'}
           </h1>
 
-          {/* Model status indicator */}
-          <Show when={modelsAvailable() !== null}>
-            <div class={`flex items-center gap-1.5 text-xs ${
-              modelsAvailable() ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
-            }`}>
-              <span class={`w-2 h-2 rounded-full ${
-                modelsAvailable() ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
-              }`} />
-              {modelsAvailable()
-                ? `${modelCount()} model${modelCount() !== 1 ? 's' : ''} available`
-                : 'No models available'
-              }
-              <button
-                onClick={checkModels}
-                class="ml-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                title="Refresh"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
-            </div>
-          </Show>
+          <div class="flex items-center gap-3">
+            {/* Model status indicator */}
+            <Show when={modelsAvailable() !== null}>
+              <div class={`flex items-center gap-1.5 text-xs ${
+                modelsAvailable() ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'
+              }`}>
+                <span class={`w-2 h-2 rounded-full ${
+                  modelsAvailable() ? 'bg-green-500' : 'bg-amber-500 animate-pulse'
+                }`} />
+                {modelsAvailable()
+                  ? `${modelCount()} model${modelCount() !== 1 ? 's' : ''} available`
+                  : 'No models available'
+                }
+                <button
+                  onClick={checkModels}
+                  class="ml-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                  title="Refresh"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+            </Show>
+
+            {/* Export dropdown */}
+            <Show when={currentChat()}>
+              <div class="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu())}
+                  class="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+                  title="Export chat"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+
+                <Show when={showExportMenu()}>
+                  <div
+                    class="absolute right-0 mt-1 w-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => exportChat('md')}
+                      class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    >
+                      Markdown (.md)
+                    </button>
+                    <button
+                      onClick={() => exportChat('pdf')}
+                      class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    >
+                      PDF (.pdf)
+                    </button>
+                    <button
+                      onClick={() => exportChat('docx')}
+                      class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    >
+                      Word (.docx)
+                    </button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
+          </div>
         </header>
+
+        {/* Privacy notice for free models */}
+        <Show when={modelsAvailable() === true}>
+          <div class="bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-4 py-2">
+            <p class="text-xs text-amber-800 dark:text-amber-200 text-center font-medium">
+              "If you're not paying for it, you're the product."
+            </p>
+            <p class="text-xs text-amber-700 dark:text-amber-300 text-center mt-1">
+              Free models train on your data. Assume all conversations are leaked to the public.
+            </p>
+          </div>
+        </Show>
 
         {/* No models warning banner */}
         <Show when={modelsAvailable() === false}>
@@ -311,6 +422,7 @@ function App() {
         {/* Input */}
         <MessageInput
           onSend={sendMessage}
+          onUpload={uploadFile}
           isStreaming={isStreaming()}
           onStop={stopStreaming}
           disabled={modelsAvailable() === false}
