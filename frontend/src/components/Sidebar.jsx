@@ -52,7 +52,7 @@ function Sidebar(props) {
       <div class="flex-1 overflow-y-auto px-2">
         <Show when={groups().today.length > 0}>
           <div class="mb-2">
-            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Today</h3>
+            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">Today</h3>
             <For each={groups().today}>
               {chat => <ChatItem chat={chat} {...props} hoveredId={hoveredId} setHoveredId={setHoveredId} />}
             </For>
@@ -61,7 +61,7 @@ function Sidebar(props) {
 
         <Show when={groups().yesterday.length > 0}>
           <div class="mb-2">
-            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Yesterday</h3>
+            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">Yesterday</h3>
             <For each={groups().yesterday}>
               {chat => <ChatItem chat={chat} {...props} hoveredId={hoveredId} setHoveredId={setHoveredId} />}
             </For>
@@ -70,7 +70,7 @@ function Sidebar(props) {
 
         <Show when={groups().older.length > 0}>
           <div class="mb-2">
-            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Older</h3>
+            <h3 class="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">Older</h3>
             <For each={groups().older}>
               {chat => <ChatItem chat={chat} {...props} hoveredId={hoveredId} setHoveredId={setHoveredId} />}
             </For>

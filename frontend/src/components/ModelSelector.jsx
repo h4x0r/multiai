@@ -95,7 +95,7 @@ export default function ModelSelector(props) {
             {(model) => (
               <div class="py-1">
                 {/* Model name header */}
-                <div class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                <div class="px-3 py-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                   {model.name}
                 </div>
 
