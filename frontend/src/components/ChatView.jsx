@@ -1,118 +1,103 @@
-import { For, Show, createSignal, onMount, createEffect } from 'solid-js';
+import { For, Show } from 'solid-js';
+import ComparisonPane from './ComparisonPane';
+import { comparisonResponses } from '../stores/comparisonStore';
 
+/**
+ * ChatView - Unified pane-based chat view
+ * Each pane shows the full conversation for its model
+ *
+ * @param {Object} props
+ * @param {Array} props.messages - Array of message objects (user messages)
+ * @param {Array} props.selectedModels - Array of selected models (1-3)
+ * @param {Array} props.availableModels - All available models for pane dropdowns
+ * @param {Function} props.onModelChange - (index, model) => void
+ * @param {Function} props.onAddPane - () => void
+ * @param {Function} props.onRemovePane - (index) => void
+ * @param {number} props.maxPanes - Maximum panes allowed (responsive)
+ * @param {Object} props.configuredProviders - { openCodeZen: bool, openRouter: bool }
+ */
 function ChatView(props) {
-  let messagesEndRef;
-
-  // Auto-scroll to bottom on new messages
-  createEffect(() => {
-    // Access messages to create dependency
-    const _ = props.messages.length;
-    const __ = props.streamingContent;
-    if (messagesEndRef) {
-      messagesEndRef.scrollIntoView({ behavior: 'smooth' });
-    }
-  });
-
-  return (
-    <div class="flex-1 overflow-y-auto px-4 py-6">
-      <div class="max-w-3xl mx-auto space-y-4">
-        <Show when={props.messages.length === 0 && !props.isStreaming}>
-          <WelcomeMessage />
-        </Show>
-
-        <For each={props.messages}>
-          {(message) => <Message message={message} />}
-        </For>
-
-        <Show when={props.isStreaming}>
-          <StreamingMessage content={props.streamingContent} />
-        </Show>
-
-        <div ref={messagesEndRef} />
-      </div>
-    </div>
-  );
-}
-
-function WelcomeMessage() {
-  return (
-    <div class="flex flex-col items-center justify-center py-12 text-center">
-      <div class="w-16 h-16 mb-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-      </div>
-      <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
-        Welcome to MultiAI
-      </h2>
-      <p class="text-gray-500 dark:text-gray-400 max-w-md">
-        Compare answers from multiple free AI models side by side. No subscriptions, no limits.
-      </p>
-    </div>
-  );
-}
-
-function Message(props) {
-  const [showActions, setShowActions] = createSignal(false);
-  const isUser = () => props.message.role === 'user';
-
-  async function copyToClipboard() {
-    try {
-      await navigator.clipboard.writeText(props.message.content);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
+  function hasActiveResponses() {
+    return Object.keys(comparisonResponses()).length > 0;
   }
 
-  return (
-    <div
-      class={`group flex ${isUser() ? 'justify-end' : 'justify-start'} message-enter`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
-    >
-      <div class="relative max-w-[80%]">
-        <div
-          class={`px-4 py-3 rounded-2xl ${
-            isUser()
-              ? 'bg-accent text-white rounded-br-md'
-              : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md'
-          }`}
-        >
-          <div class="text-sm whitespace-pre-wrap break-words">
-            {props.message.content}
-          </div>
-        </div>
+  // Get only user messages for display in panes
+  const userMessages = () => props.messages.filter(m => m.role === 'user');
 
-        {/* Actions (hover only) */}
-        <Show when={showActions()}>
-          <div class={`absolute top-0 ${isUser() ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} flex items-center gap-1`}>
-            <button
-              onClick={copyToClipboard}
-              class="p-1.5 rounded-lg bg-white dark:bg-gray-700 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400"
-              title="Copy"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-            </button>
-          </div>
-        </Show>
-      </div>
+  return (
+    <div class="chat-view-container flex-1 flex flex-col overflow-hidden">
+      {/* Unified pane view - each pane shows full conversation */}
+      <PanesView
+        selectedModels={props.selectedModels}
+        availableModels={props.availableModels}
+        onModelChange={props.onModelChange}
+        onAddPane={props.onAddPane}
+        onRemovePane={props.onRemovePane}
+        maxPanes={props.maxPanes}
+        configuredProviders={props.configuredProviders}
+        userMessages={userMessages()}
+        hasMessages={props.messages.length > 0 || hasActiveResponses()}
+        onOpenSettings={props.onOpenSettings}
+      />
     </div>
   );
 }
 
-function StreamingMessage(props) {
+/**
+ * PanesView - 1-3 panes with inline model selection
+ */
+function PanesView(props) {
+  const paneCount = () => props.selectedModels?.length || 0;
+  const maxPanes = () => props.maxPanes || 3;
+  const canAddPane = () => paneCount() < maxPanes();
+  const canRemovePane = () => paneCount() > 1; // Allow removing down to 1 pane
+
+  // Color dots for each model
+  const colorDots = ['bg-blue-500', 'bg-purple-500', 'bg-green-500'];
+
   return (
-    <div class="flex justify-start message-enter">
-      <div class="max-w-[80%]">
-        <div class="px-4 py-3 rounded-2xl rounded-bl-md bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-          <div class="text-sm whitespace-pre-wrap break-words">
-            {props.content || ''}
-            <span class="cursor-blink">|</span>
-          </div>
-        </div>
-      </div>
+    <div class="flex-1 flex message-enter min-h-0">
+      <For each={props.selectedModels}>
+        {(model, index) => (
+          <>
+            {/* Pane */}
+            <div class="flex-1 min-w-0 flex flex-col min-h-0">
+              <ComparisonPane
+                model={model}
+                colorDot={colorDots[index() % colorDots.length]}
+                availableModels={props.availableModels}
+                configuredProviders={props.configuredProviders}
+                selectedModelIds={props.selectedModels?.map(m => m.id) || []}
+                onModelChange={(newModel) => props.onModelChange?.(index(), newModel)}
+                onRemove={() => props.onRemovePane?.(index())}
+                canRemove={canRemovePane()}
+                userMessages={props.userMessages}
+                hasMessages={props.hasMessages}
+                onOpenSettings={props.onOpenSettings}
+              />
+            </div>
+            {/* Vertical divider - not on last pane */}
+            <Show when={index() < paneCount() - 1}>
+              <div class="w-px bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+            </Show>
+          </>
+        )}
+      </For>
+
+      {/* Add pane button */}
+      <Show when={canAddPane()}>
+        <div class="w-px bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+        <button
+          onClick={props.onAddPane}
+          class="w-12 flex-shrink-0 flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          title="Add comparison pane"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span class="text-xs">Add</span>
+        </button>
+      </Show>
     </div>
   );
 }

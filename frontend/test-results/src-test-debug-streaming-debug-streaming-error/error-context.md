@@ -1,0 +1,81 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic:
+    - generic:
+      - generic:
+        - img "MultiAI"
+        - heading "MultiAI" [level=1]
+      - paragraph: Ready!
+  - generic [ref=e3]:
+    - button "Hide sidebar" [ref=e5]:
+      - img [ref=e6]
+    - generic [ref=e9]:
+      - complementary [ref=e10]:
+        - button "New Chat" [ref=e12]:
+          - img [ref=e13]
+          - text: New Chat
+        - generic [ref=e16]:
+          - heading "Today" [level=3] [ref=e17]
+          - button "Hello, what is 2+2?" [ref=e19]
+        - button "Settings" [ref=e21]:
+          - img [ref=e22]
+          - text: Settings
+      - generic [ref=e27]:
+        - banner [ref=e28]:
+          - heading "Hello, what is 2+2?" [level=1] [ref=e29]
+          - button "Export chat" [ref=e32]:
+            - img [ref=e33]
+        - generic [ref=e37]:
+          - img [ref=e40]
+          - generic [ref=e42]:
+            - heading "\"If you're not paying for it, you're the product.\"" [level=3] [ref=e43]
+            - paragraph [ref=e44]: Free AI services may use your conversations to train their models. Avoid sharing sensitive personal, financial, or confidential information.
+          - button "Dismiss for this session" [ref=e45]:
+            - img [ref=e46]
+        - generic [ref=e49]:
+          - generic [ref=e51]:
+            - generic [ref=e52]:
+              - generic [ref=e54]:
+                - button "Alpha Glm 4.7" [ref=e55]:
+                  - generic [ref=e56]: Alpha Glm 4.7
+                  - img [ref=e57]
+                - generic [ref=e59]:
+                  - generic "Time to first token" [ref=e60]: 1.5s
+                  - generic "Total time" [ref=e61]: 1.5s
+              - button "Remove pane" [ref=e62]:
+                - img [ref=e63]
+            - generic [ref=e65]:
+              - paragraph [ref=e68]: Hello, what is 2+2?
+              - paragraph [ref=e71]: 2 + 2 = 4
+            - button "Copy" [ref=e73]:
+              - img [ref=e74]
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - generic [ref=e81]:
+                - button "Big Pickle" [ref=e82]:
+                  - generic [ref=e83]: Big Pickle
+                  - img [ref=e84]
+                - generic [ref=e86]:
+                  - generic "Time to first token" [ref=e87]: 1.1s
+                  - generic "Total time" [ref=e88]: 5.3s
+              - button "Remove pane" [ref=e89]:
+                - img [ref=e90]
+            - generic [ref=e92]:
+              - paragraph [ref=e95]: Hello, what is 2+2?
+              - paragraph [ref=e98]: 2 + 2 equals 4.
+            - button "Copy" [ref=e100]:
+              - img [ref=e101]
+          - button "Add" [ref=e104]:
+            - img [ref=e105]
+            - generic [ref=e107]: Add
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - button "Attach file (PDF, DOCX, TXT)" [ref=e112]:
+              - img [ref=e113]
+            - textbox "Type your message..." [ref=e115]
+            - button "Send (Enter)" [disabled] [ref=e116]:
+              - img [ref=e117]
+          - generic [ref=e120]: Enter to send · Shift+Enter for newline
+```

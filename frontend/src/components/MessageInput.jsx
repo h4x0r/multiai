@@ -22,8 +22,8 @@ function MessageInput(props) {
   }
 
   function handleKeyDown(e) {
-    // Cmd/Ctrl + Enter to send
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    // Enter to send, Shift+Enter for newline
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
     }
@@ -78,6 +78,20 @@ function MessageInput(props) {
         e.target.value = '';
       }
     }
+  }
+
+  // Determine placeholder text
+  function getPlaceholder() {
+    if (props.disabled && !props.placeholder) {
+      return "No models available...";
+    }
+    if (isUploading()) {
+      return "Uploading document...";
+    }
+    if (props.placeholder) {
+      return props.placeholder;
+    }
+    return "Message...";
   }
 
   return (
@@ -140,13 +154,7 @@ function MessageInput(props) {
               value={content()}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder={
-                props.disabled
-                  ? "No models available..."
-                  : isUploading()
-                  ? "Uploading document..."
-                  : "Message... (⌘↩ to send)"
-              }
+              placeholder={getPlaceholder()}
               rows="1"
               class="flex-1 py-3 pr-3 bg-transparent resize-none outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm max-h-48 disabled:cursor-not-allowed"
               disabled={isDisabled()}
@@ -159,10 +167,10 @@ function MessageInput(props) {
                 <button
                   type="button"
                   onClick={props.onStop}
-                  class="m-2 p-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+                  class="m-1.5 p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors"
                   title="Stop"
                 >
-                  <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="1" />
                   </svg>
                 </button>
@@ -171,14 +179,14 @@ function MessageInput(props) {
               <button
                 type="submit"
                 disabled={!content().trim() || isDisabled()}
-                class={`m-2 p-2 rounded-lg transition-colors ${
+                class={`m-1.5 p-1.5 rounded-md transition-colors ${
                   content().trim() && !isDisabled()
                     ? 'bg-accent hover:bg-accent-hover text-white'
                     : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
                 }`}
-                title={props.disabled ? "No models available" : "Send (⌘↩)"}
+                title={props.disabled ? "No models available" : "Send (Enter)"}
               >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
                 </svg>
               </button>
@@ -191,7 +199,7 @@ function MessageInput(props) {
               when={!props.disabled}
               fallback={
                 <span class="text-xs text-amber-600 dark:text-amber-400">
-                  Messaging disabled - no AI models available
+                  {props.placeholder || 'Messaging disabled - no AI models available'}
                 </span>
               }
             >
@@ -204,7 +212,7 @@ function MessageInput(props) {
                 }
               >
                 <span class="text-xs text-gray-400">
-                  Press <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">⌘</kbd> + <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">↩</kbd> to send
+                  <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">Enter</kbd> to send · <kbd class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 font-mono">Shift+Enter</kbd> for newline
                 </span>
               </Show>
             </Show>

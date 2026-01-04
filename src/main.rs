@@ -12,6 +12,10 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 #[command(about = "Compare multiple free AI models side by side")]
 #[command(version)]
 struct Cli {
+    /// Start MCP server mode (stdio JSON-RPC for Claude Desktop)
+    #[arg(long)]
+    mcp: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -64,6 +68,11 @@ impl From<LogLevel> for LogVerbosity {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // MCP mode takes precedence over subcommands
+    if cli.mcp {
+        return multiai::mcp::run_mcp();
+    }
 
     match cli.command {
         Some(Commands::Serve { port, log_level, config }) => {

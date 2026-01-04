@@ -1,6 +1,123 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
-/* macOS-style scrollbar */
+/* Enable class-based dark mode (Tailwind v4) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================
+   Color Palette
+   Zinc-based themes for high legibility
+   Light: Soft off-whites + dark text
+   Dark: Material-inspired grays + off-white text
+   ============================================ */
+
+:root,
+.light {
+  /* Clean Light Theme - High Legibility */
+  --ctp-rosewater: #f472b6;
+  --ctp-flamingo: #fb7185;
+  --ctp-pink: #ec4899;
+  --ctp-mauve: #a855f7;
+  --ctp-red: #ef4444;
+  --ctp-maroon: #f43f5e;
+  --ctp-peach: #f97316;
+  --ctp-yellow: #eab308;
+  --ctp-green: #22c55e;
+  --ctp-teal: #14b8a6;
+  --ctp-sky: #0ea5e9;
+  --ctp-sapphire: #06b6d4;
+  --ctp-blue: #3b82f6;
+  --ctp-lavender: #8b5cf6;
+
+  /* Text - high contrast dark grays */
+  --ctp-text: #18181b;       /* zinc-900 - primary text */
+  --ctp-subtext1: #27272a;   /* zinc-800 */
+  --ctp-subtext0: #3f3f46;   /* zinc-700 */
+  --ctp-overlay2: #52525b;   /* zinc-600 */
+  --ctp-overlay1: #71717a;   /* zinc-500 */
+  --ctp-overlay0: #a1a1aa;   /* zinc-400 */
+  /* Surfaces - soft off-whites */
+  --ctp-surface2: #d4d4d8;   /* zinc-300 */
+  --ctp-surface1: #e4e4e7;   /* zinc-200 */
+  --ctp-surface0: #f4f4f5;   /* zinc-100 */
+  --ctp-base: #fafafa;       /* zinc-50 - main background */
+  --ctp-mantle: #ffffff;     /* white - cards/elevated */
+  --ctp-crust: #f4f4f5;      /* zinc-100 */
+
+  color-scheme: light;
+}
+
+html.dark,
+:root.dark {
+  /* Material-Inspired Dark Theme - High Legibility */
+  --ctp-rosewater: #fda4af;
+  --ctp-flamingo: #fb7185;
+  --ctp-pink: #f472b6;
+  --ctp-mauve: #c084fc;
+  --ctp-red: #f87171;
+  --ctp-maroon: #fb7185;
+  --ctp-peach: #fb923c;
+  --ctp-yellow: #fbbf24;
+  --ctp-green: #4ade80;
+  --ctp-teal: #2dd4bf;
+  --ctp-sky: #38bdf8;
+  --ctp-sapphire: #22d3ee;
+  --ctp-blue: #60a5fa;
+  --ctp-lavender: #a78bfa;
+
+  /* Text - off-white for reduced glare */
+  --ctp-text: #f4f4f5;       /* zinc-100 - primary text */
+  --ctp-subtext1: #e4e4e7;   /* zinc-200 */
+  --ctp-subtext0: #d4d4d8;   /* zinc-300 */
+  --ctp-overlay2: #a1a1aa;   /* zinc-400 */
+  --ctp-overlay1: #71717a;   /* zinc-500 */
+  --ctp-overlay0: #52525b;   /* zinc-600 */
+  /* Surfaces - Material dark grays (not pure black) */
+  --ctp-surface2: #3f3f46;   /* zinc-700 */
+  --ctp-surface1: #27272a;   /* zinc-800 */
+  --ctp-surface0: #1f1f23;   /* slightly lighter than base */
+  --ctp-base: #18181b;       /* zinc-900 - main background */
+  --ctp-mantle: #1f1f23;     /* elevated surfaces */
+  --ctp-crust: #09090b;      /* zinc-950 - deepest */
+
+  color-scheme: dark;
+}
+
+/* Map to Tailwind gray scale - Light theme */
+html, html.light {
+  --color-gray-50: #fafafa;
+  --color-gray-100: #ffffff;
+  --color-gray-200: #f4f4f5;
+  --color-gray-300: #e4e4e7;
+  --color-gray-400: #a1a1aa;
+  --color-gray-500: #71717a;
+  --color-gray-600: #3f3f46;
+  --color-gray-700: #27272a;
+  --color-gray-800: #18181b;
+  --color-gray-900: #18181b;
+  --color-white: #ffffff;
+  background-color: #fafafa;
+  color: #18181b;
+}
+
+/* Map to Tailwind gray scale - Dark theme (must come after light) */
+html.dark {
+  --color-gray-50: #f4f4f5;
+  --color-gray-100: #e4e4e7;
+  --color-gray-200: #d4d4d8;
+  --color-gray-300: #a1a1aa;
+  --color-gray-400: #71717a;
+  --color-gray-500: #52525b;
+  --color-gray-600: #3f3f46;
+  --color-gray-700: #27272a;
+  --color-gray-800: #1f1f23;
+  --color-gray-900: #18181b;
+  --color-white: #ffffff;
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
+/* macOS-style scrollbar with Catppuccin colors */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -10,22 +127,24 @@
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+.light ::-webkit-scrollbar-thumb,
+:root ::-webkit-scrollbar-thumb {
+  background: var(--ctp-surface2);
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+.light ::-webkit-scrollbar-thumb:hover,
+:root ::-webkit-scrollbar-thumb:hover {
+  background: var(--ctp-overlay0);
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-  }
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--ctp-surface1);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--ctp-surface2);
 }
 
 /* Message animations */
@@ -48,10 +167,68 @@
   animation: blink 1s ease-in-out infinite;
 }
 
-/* Custom accent color */
+/* Override Tailwind gray scale with Zinc for legibility */
 @theme {
-  --color-accent: rgb(0, 122, 255);
-  --color-accent-hover: rgb(0, 102, 204);
+  --color-accent: var(--ctp-blue);
+  --color-accent-hover: var(--ctp-sapphire);
+
+  /* Zinc gray scale - same in light & dark, theme controls via dark: variants */
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f4f4f5;
+  --color-gray-200: #e4e4e7;
+  --color-gray-300: #d4d4d8;
+  --color-gray-400: #a1a1aa;
+  --color-gray-500: #71717a;
+  --color-gray-600: #52525b;
+  --color-gray-700: #3f3f46;
+  --color-gray-800: #27272a;
+  --color-gray-900: #18181b;
+  --color-gray-950: #09090b;
+}
+
+/* ============================================
+   Loading Screen Progress Bar Animation
+   ============================================ */
+
+@keyframes progressPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes progressShine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.progress-bar-animate {
+  position: relative;
+  overflow: hidden;
+  animation: progressPulse 2s ease-in-out infinite;
+}
+
+.progress-bar-animate::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: progressShine 1.5s ease-in-out infinite;
 }
 
 /* ============================================
@@ -129,6 +306,79 @@
 }
 
 /* ============================================
+   Comparison Mode Styles
+   ============================================ */
+
+/* Staggered column fade-in for comparison view */
+@keyframes columnFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comparison-column {
+  animation: columnFadeIn 0.3s ease-out backwards;
+}
+
+.comparison-column:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.comparison-column:nth-child(2) {
+  animation-delay: 100ms;
+}
+
+.comparison-column:nth-child(3) {
+  animation-delay: 200ms;
+}
+
+/* Loading shimmer effect for comparison responses */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(200, 200, 200, 0.1) 25%,
+    rgba(200, 200, 200, 0.3) 50%,
+    rgba(200, 200, 200, 0.1) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@media (prefers-color-scheme: dark) {
+  .loading-shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(100, 100, 100, 0.1) 25%,
+      rgba(100, 100, 100, 0.3) 50%,
+      rgba(100, 100, 100, 0.1) 75%
+    );
+    background-size: 200% 100%;
+  }
+}
+
+/* Comparison view responsive adjustments */
+@media (max-width: 768px) {
+  .comparison-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+}
+
+/* ============================================
    Focus Styles (WCAG 2.1 AA Compliant)
    ============================================ */
 
@@ -190,7 +440,11 @@
   .animate-slide-up,
   .animate-dropdown-in,
   .animate-banner-in,
-  .animate-step-in {
+  .animate-step-in,
+  .comparison-column,
+  .loading-shimmer,
+  .progress-bar-animate,
+  .progress-bar-animate::after {
     animation: none;
   }
 }

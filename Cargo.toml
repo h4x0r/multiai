@@ -12,7 +12,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
 
 # HTTP client
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream", "blocking"], default-features = false }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -38,6 +38,9 @@ moka = { version = "0.12", features = ["future"] }
 # HTML parsing
 scraper = "0.22"
 
+# Regex for text parsing
+regex = "1"
+
 # Database
 rusqlite = { version = "0.32", features = ["bundled"] }
 
@@ -47,6 +50,7 @@ dirs = "5"
 
 # Document processing
 pdf-extract = "0.8"
+printpdf = "0.5"
 zip = "2"
 quick-xml = "0.37"
 

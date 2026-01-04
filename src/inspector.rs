@@ -8,7 +8,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -78,26 +78,26 @@ impl TimingMetrics {
 /// Traffic inspector for capturing and analyzing HTTP transactions.
 #[derive(Clone)]
 pub struct TrafficInspector {
-    transactions: Arc<RwLock<Vec<CapturedTransaction>>>,
-    enabled: Arc<RwLock<bool>>,
+    transactions: Arc<Mutex<Vec<CapturedTransaction>>>,
+    enabled: Arc<Mutex<bool>>,
 }
 
 impl TrafficInspector {
     pub fn new() -> Self {
         Self {
-            transactions: Arc::new(RwLock::new(Vec::new())),
-            enabled: Arc::new(RwLock::new(true)),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            enabled: Arc::new(Mutex::new(true)),
         }
     }
 
     /// Check if inspector is enabled.
     pub fn is_enabled(&self) -> bool {
-        *self.enabled.read().unwrap()
+        *self.enabled.lock().unwrap()
     }
 
     /// Enable or disable the inspector.
     pub fn set_enabled(&self, enabled: bool) {
-        *self.enabled.write().unwrap() = enabled;
+        *self.enabled.lock().unwrap() = enabled;
     }
 
     /// Start a new transaction with a request.
@@ -146,18 +146,18 @@ impl TrafficInspector {
     /// Store a completed transaction.
     pub fn store(&self, transaction: CapturedTransaction) {
         if self.is_enabled() {
-            self.transactions.write().unwrap().push(transaction);
+            self.transactions.lock().unwrap().push(transaction);
         }
     }
 
     /// Get all stored transactions.
     pub fn get_all(&self) -> Vec<CapturedTransaction> {
-        self.transactions.read().unwrap().clone()
+        self.transactions.lock().unwrap().clone()
     }
 
     /// Clear all stored transactions.
     pub fn clear(&self) {
-        self.transactions.write().unwrap().clear();
+        self.transactions.lock().unwrap().clear();
     }
 
     /// Export transactions in HAR (HTTP Archive) format.

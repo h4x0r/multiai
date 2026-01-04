@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Theme Test</title>
+  <link rel="stylesheet" href="/src/index.css">
+  <style>
+    body { margin: 0; padding: 20px; }
+    .test-box { padding: 20px; margin: 10px 0; border-radius: 8px; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    .active { outline: 3px solid blue; }
+  </style>
+</head>
+<body>
+  <h1>Theme Debug Test</h1>
+
+  <div>
+    <button onclick="setTheme('light')" id="btn-light">Light</button>
+    <button onclick="setTheme('dark')" id="btn-dark">Dark</button>
+  </div>
+
+  <p>Current HTML class: <code id="html-class"></code></p>
+
+  <div class="test-box bg-gray-50">bg-gray-50 (should be light in light mode)</div>
+  <div class="test-box bg-gray-100">bg-gray-100</div>
+  <div class="test-box bg-gray-200">bg-gray-200</div>
+  <div class="test-box bg-gray-800 text-white">bg-gray-800 (should be dark)</div>
+  <div class="test-box bg-gray-900 text-white">bg-gray-900 (should be darkest)</div>
+  <div class="test-box bg-white border">bg-white</div>
+
+  <h2>With dark: variants</h2>
+  <div class="test-box bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    bg-gray-50 dark:bg-gray-900 - This should flip
+  </div>
+  <div class="test-box bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
+    bg-white dark:bg-gray-800 - This should flip
+  </div>
+
+  <script>
+    function setTheme(theme) {
+      document.documentElement.classList.remove('light', 'dark');
+      document.documentElement.classList.add(theme);
+      updateDisplay();
+    }
+
+    function updateDisplay() {
+      document.getElementById('html-class').textContent = document.documentElement.className || '(none)';
+      document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      if (document.documentElement.classList.contains('light')) {
+        document.getElementById('btn-light').classList.add('active');
+      } else if (document.documentElement.classList.contains('dark')) {
+        document.getElementById('btn-dark').classList.add('active');
+      }
+    }
+
+    // Initialize
+    updateDisplay();
+  </script>
+</body>
+</html>

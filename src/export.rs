@@ -1,5 +1,6 @@
 //! Export chat conversations to PDF and DOCX formats.
 
+use printpdf::*;
 use std::io::Write;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
@@ -69,17 +70,21 @@ fn export_to_markdown(chat: &ExportChat) -> Result<Vec<u8>, String> {
 
     // Title
     output.push_str(&format!("# {}\n\n", chat.title));
-    output.push_str(&format!("*Exported: {}*\n\n---\n\n", chat.created_at));
+    output.push_str(&format!("*Exported: {}*\n\n---\n\n", format_timestamp(&chat.created_at)));
 
     // Messages
     for msg in &chat.messages {
-        let role_label = match msg.role.as_str() {
-            "user" => "**You**",
-            "assistant" => "**Assistant**",
-            _ => &msg.role,
-        };
+        let timestamp = format_timestamp(&msg.created_at);
 
-        output.push_str(&format!("{} *({})*\n\n", role_label, msg.created_at));
+        // Timestamp on its own line, then role header
+        output.push_str(&format!("*{}*\n", timestamp));
+        if msg.role == "user" {
+            output.push_str("**User:**\n");
+        } else {
+            // Use the role as-is (could be model name like "Alpha Glm 4.7")
+            output.push_str(&format!("**{}:**\n", msg.role));
+        }
+
         output.push_str(&msg.content);
         output.push_str("\n\n---\n\n");
     }
@@ -87,86 +92,114 @@ fn export_to_markdown(chat: &ExportChat) -> Result<Vec<u8>, String> {
     Ok(output.into_bytes())
 }
 
-fn export_to_pdf(chat: &ExportChat) -> Result<Vec<u8>, String> {
-    // Simple PDF generation using raw PDF structure
-    // For production, consider using a proper PDF library like printpdf
-    let content = generate_pdf_content(chat);
-    Ok(content)
+/// Format ISO timestamp to readable format (e.g., "Jan 3, 2026 7:24 PM")
+fn format_timestamp(iso: &str) -> String {
+    // Try to parse ISO 8601 format and convert to readable
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(iso) {
+        dt.format("%b %d, %Y %I:%M %p").to_string()
+    } else {
+        // Fallback: just return as-is
+        iso.to_string()
+    }
 }
 
-fn generate_pdf_content(chat: &ExportChat) -> Vec<u8> {
-    let mut text_content = String::new();
+fn export_to_pdf(chat: &ExportChat) -> Result<Vec<u8>, String> {
+    // Create PDF document with A4 page size
+    let page_width = Mm(210.0);
+    let page_height = Mm(297.0);
+    let (doc, page1, layer1) =
+        PdfDocument::new(&chat.title, page_width, page_height, "Layer 1");
 
-    // Build text content for PDF
-    text_content.push_str(&format!("{}\n\n", chat.title));
+    // Use built-in Helvetica font
+    let font = doc
+        .add_builtin_font(BuiltinFont::Helvetica)
+        .map_err(|e| format!("Failed to add font: {}", e))?;
+    let font_bold = doc
+        .add_builtin_font(BuiltinFont::HelveticaBold)
+        .map_err(|e| format!("Failed to add font: {}", e))?;
 
+    let mut current_layer = doc.get_page(page1).get_layer(layer1);
+    let mut y_pos = Mm(280.0); // Start near top
+    let line_height = Mm(5.0);
+    let margin_left = Mm(15.0);
+    let page_bottom = Mm(20.0);
+
+    // Title
+    current_layer.use_text(&chat.title, 16.0, margin_left, y_pos, &font_bold);
+    y_pos -= Mm(10.0);
+
+    // Messages
     for msg in &chat.messages {
-        let role = if msg.role == "user" { "You" } else { "Assistant" };
-        text_content.push_str(&format!("[{}]\n{}\n\n", role, msg.content));
-    }
-
-    // Create minimal PDF structure
-    let text_lines: Vec<&str> = text_content.lines().collect();
-    let mut stream_content = String::new();
-
-    stream_content.push_str("BT\n");
-    stream_content.push_str("/F1 12 Tf\n");
-
-    let mut y = 750.0;
-    for line in text_lines {
-        if y < 50.0 {
-            break; // Simple pagination - stop at bottom
+        // Check if we need a new page
+        if y_pos < page_bottom + Mm(20.0) {
+            let (new_page, new_layer) = doc.add_page(page_width, page_height, "Layer 1");
+            current_layer = doc.get_page(new_page).get_layer(new_layer);
+            y_pos = Mm(280.0);
         }
-        // Escape special PDF characters
-        let escaped = line
-            .replace('\\', "\\\\")
-            .replace('(', "\\(")
-            .replace(')', "\\)");
-        stream_content.push_str(&format!("50 {} Td\n", y));
-        stream_content.push_str(&format!("({}) Tj\n", escaped));
-        y -= 14.0;
+
+        // Timestamp
+        let timestamp = format_timestamp(&msg.created_at);
+        current_layer.use_text(&timestamp, 9.0, margin_left, y_pos, &font);
+        y_pos -= line_height;
+
+        // Role header
+        let role_label = if msg.role == "user" {
+            "User:".to_string()
+        } else {
+            format!("{}:", msg.role)
+        };
+        current_layer.use_text(&role_label, 11.0, margin_left, y_pos, &font_bold);
+        y_pos -= line_height;
+
+        // Content - split by lines and wrap long lines
+        for line in msg.content.lines() {
+            // Simple word wrapping at ~80 chars
+            let wrapped = wrap_text(line, 80);
+            for wrapped_line in wrapped {
+                if y_pos < page_bottom {
+                    let (new_page, new_layer) = doc.add_page(page_width, page_height, "Layer 1");
+                    current_layer = doc.get_page(new_page).get_layer(new_layer);
+                    y_pos = Mm(280.0);
+                }
+                current_layer.use_text(&wrapped_line, 10.0, margin_left, y_pos, &font);
+                y_pos -= line_height;
+            }
+        }
+
+        y_pos -= Mm(5.0); // Extra space between messages
     }
-    stream_content.push_str("ET\n");
 
-    let stream_bytes = stream_content.as_bytes();
-    let stream_len = stream_bytes.len();
+    // Save to bytes
+    let buffer = doc.save_to_bytes().map_err(|e| format!("Failed to save PDF: {}", e))?;
+    Ok(buffer)
+}
 
-    let mut pdf = String::new();
-    pdf.push_str("%PDF-1.4\n");
+/// Simple word wrapping for PDF text
+fn wrap_text(text: &str, max_chars: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
 
-    // Catalog
-    pdf.push_str("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    for word in text.split_whitespace() {
+        if current_line.is_empty() {
+            current_line = word.to_string();
+        } else if current_line.len() + 1 + word.len() <= max_chars {
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            lines.push(current_line);
+            current_line = word.to_string();
+        }
+    }
 
-    // Pages
-    pdf.push_str("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
 
-    // Page
-    pdf.push_str("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n");
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
 
-    // Content stream
-    pdf.push_str(&format!(
-        "4 0 obj\n<< /Length {} >>\nstream\n{}\nendstream\nendobj\n",
-        stream_len, stream_content
-    ));
-
-    // Font
-    pdf.push_str("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
-
-    // Cross-reference table
-    let xref_pos = pdf.len();
-    pdf.push_str("xref\n0 6\n");
-    pdf.push_str("0000000000 65535 f \n");
-    pdf.push_str("0000000009 00000 n \n");
-    pdf.push_str("0000000058 00000 n \n");
-    pdf.push_str("0000000115 00000 n \n");
-    pdf.push_str(&format!("0000000{:03} 00000 n \n", 250));
-    pdf.push_str(&format!("0000000{:03} 00000 n \n", 250 + stream_len + 50));
-
-    // Trailer
-    pdf.push_str("trailer\n<< /Size 6 /Root 1 0 R >>\n");
-    pdf.push_str(&format!("startxref\n{}\n%%EOF\n", xref_pos));
-
-    pdf.into_bytes()
+    lines
 }
 
 fn export_to_docx(chat: &ExportChat) -> Result<Vec<u8>, String> {
@@ -330,8 +363,8 @@ mod tests {
         let result = export_chat(&chat, ExportFormat::Markdown).unwrap();
         let content = String::from_utf8(result).unwrap();
 
-        assert!(content.contains("**You**"));
-        assert!(content.contains("**Assistant**"));
+        assert!(content.contains("**User:**"));
+        assert!(content.contains("**assistant:**")); // Role used as-is from message
         assert!(content.contains("Hello, how are you?"));
         assert!(content.contains("I'm doing great!"));
     }
@@ -345,8 +378,8 @@ mod tests {
         let chat = sample_chat();
         let result = export_chat(&chat, ExportFormat::Pdf).unwrap();
 
-        // Check PDF header
-        assert!(result.starts_with(b"%PDF-1.4"));
+        // Check PDF header (version may vary)
+        assert!(result.starts_with(b"%PDF-"));
         // Check PDF footer
         let content = String::from_utf8_lossy(&result);
         assert!(content.contains("%%EOF"));

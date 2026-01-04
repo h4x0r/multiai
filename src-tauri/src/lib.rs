@@ -1,4 +1,5 @@
 use multiai::api::{create_router_with_state, AppState};
+use multiai::scanner::FreeModelScanner;
 use std::net::SocketAddr;
 use tauri::{
     Manager, RunEvent, WindowEvent,
@@ -6,12 +7,48 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 
-async fn find_available_port() -> Option<(tokio::net::TcpListener, u16)> {
+/// Result of port finding: listener, port, and optional Ollama URL if detected
+struct PortResult {
+    listener: tokio::net::TcpListener,
+    port: u16,
+    ollama_url: Option<String>,
+    /// If MultiAI is already running, we should exit
+    multiai_already_running: bool,
+}
+
+async fn find_available_port() -> Option<PortResult> {
+    let base_url = "http://127.0.0.1:11434";
+
+    // First, check if port 11434 is taken by us (MultiAI already running)
+    if FreeModelScanner::detect_multiai(base_url).await {
+        log::info!("MultiAI already running at {}", base_url);
+        return Some(PortResult {
+            listener: tokio::net::TcpListener::bind("127.0.0.1:0").await.ok()?,
+            port: 11434,
+            ollama_url: None,
+            multiai_already_running: true,
+        });
+    }
+
+    // Check if port 11434 is taken by Ollama
+    let ollama_detected = FreeModelScanner::detect_ollama(base_url).await;
+    let ollama_url = if ollama_detected {
+        log::info!("Detected local Ollama instance at {}", base_url);
+        Some(base_url.to_string())
+    } else {
+        None
+    };
+
     // Try ports starting from 11434 (Ollama-compatible)
     for port in 11434..11444 {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
         if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
-            return Some((listener, port));
+            return Some(PortResult {
+                listener,
+                port,
+                ollama_url,
+                multiai_already_running: false,
+            });
         }
     }
     None
@@ -23,16 +60,27 @@ pub fn run() {
     std::thread::spawn(|| {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         rt.block_on(async {
-            let (listener, port) = find_available_port()
+            let result = find_available_port()
                 .await
                 .expect("No available port found (tried 11434-11443)");
 
-            let state = AppState::default();
+            // If MultiAI is already running, don't start another server
+            if result.multiai_already_running {
+                log::info!("MultiAI already running, skipping server start");
+                return;
+            }
+
+            // Create state with Ollama URL if detected
+            let state = if let Some(ollama_url) = result.ollama_url {
+                AppState::with_ollama(&ollama_url)
+            } else {
+                AppState::default()
+            };
             let router = create_router_with_state(state);
 
-            log::info!("MultiAI backend starting on http://127.0.0.1:{}", port);
+            log::info!("MultiAI backend starting on http://127.0.0.1:{}", result.port);
 
-            axum::serve(listener, router)
+            axum::serve(result.listener, router)
                 .await
                 .expect("Server error");
         });

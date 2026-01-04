@@ -1,12 +1,19 @@
-//! Configuration management for FreeTier.
+//! Configuration management for MultiAI.
 //!
-//! Loads settings from `~/.config/freetier/config.toml` with environment overrides.
+//! Loads settings from `~/.config/multiai/config.toml` with environment overrides.
 
+use crate::scanner::Source;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+// Spending limit constants (single source of truth)
+pub const DEFAULT_DAILY_CAP: f64 = 5.00;
+pub const DEFAULT_MONTHLY_CAP: f64 = 50.00;
+pub const DEFAULT_WARN_PERCENT: u8 = 80;
+
 /// Main configuration structure.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub struct Config {
     #[serde(default)]
     pub gateway: GatewayConfig,
@@ -18,6 +25,58 @@ pub struct Config {
     pub inspector: InspectorConfig,
     #[serde(default)]
     pub app: AppConfig,
+    #[serde(default)]
+    pub spending: SpendingConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SpendingConfig {
+    #[serde(default = "default_daily_cap")]
+    pub daily_cap: f64,
+    #[serde(default = "default_monthly_cap")]
+    pub monthly_cap: f64,
+    #[serde(default = "default_warn_percent")]
+    pub warn_at_percent: u8,
+}
+
+fn default_daily_cap() -> f64 {
+    DEFAULT_DAILY_CAP
+}
+fn default_monthly_cap() -> f64 {
+    DEFAULT_MONTHLY_CAP
+}
+fn default_warn_percent() -> u8 {
+    DEFAULT_WARN_PERCENT
+}
+
+impl Default for SpendingConfig {
+    fn default() -> Self {
+        Self {
+            daily_cap: DEFAULT_DAILY_CAP,
+            monthly_cap: DEFAULT_MONTHLY_CAP,
+            warn_at_percent: DEFAULT_WARN_PERCENT,
+        }
+    }
+}
+
+impl SpendingConfig {
+    /// Load from environment variables, falling back to defaults.
+    pub fn from_env() -> Self {
+        Self {
+            daily_cap: std::env::var("MULTIAI_DAILY_CAP")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(DEFAULT_DAILY_CAP),
+            monthly_cap: std::env::var("MULTIAI_MONTHLY_CAP")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(DEFAULT_MONTHLY_CAP),
+            warn_at_percent: std::env::var("MULTIAI_WARN_AT_PERCENT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(DEFAULT_WARN_PERCENT),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -95,17 +154,6 @@ fn default_retention_days() -> u32 { 30 }
 fn default_max_transactions() -> usize { 1000 }
 fn default_verbosity() -> LogVerbosity { LogVerbosity::Compact }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            gateway: GatewayConfig::default(),
-            api_keys: ApiKeysConfig::default(),
-            logging: LoggingConfig::default(),
-            inspector: InspectorConfig::default(),
-            app: AppConfig::default(),
-        }
-    }
-}
 
 impl Default for GatewayConfig {
     fn default() -> Self {
@@ -159,6 +207,11 @@ impl Config {
         Self::load_from(Self::default_path())
     }
 
+    /// Load config with environment overrides applied (convenience method).
+    pub fn load_with_env() -> Self {
+        Self::load().unwrap_or_default().with_env_overrides()
+    }
+
     /// Load config from a specific path.
     pub fn load_from(path: PathBuf) -> Result<Self, ConfigError> {
         match std::fs::read_to_string(&path) {
@@ -176,6 +229,22 @@ impl Config {
         if let Ok(key) = std::env::var("OPENCODE_ZEN_API_KEY") {
             self.api_keys.opencode_zen = Some(key);
         }
+        // Spending caps
+        if let Ok(val) = std::env::var("MULTIAI_DAILY_CAP") {
+            if let Ok(cap) = val.parse() {
+                self.spending.daily_cap = cap;
+            }
+        }
+        if let Ok(val) = std::env::var("MULTIAI_MONTHLY_CAP") {
+            if let Ok(cap) = val.parse() {
+                self.spending.monthly_cap = cap;
+            }
+        }
+        if let Ok(val) = std::env::var("MULTIAI_WARN_AT_PERCENT") {
+            if let Ok(pct) = val.parse() {
+                self.spending.warn_at_percent = pct;
+            }
+        }
         self
     }
 
@@ -191,6 +260,15 @@ impl Config {
         }
         let content = toml::to_string_pretty(self).map_err(ConfigError::Serialize)?;
         std::fs::write(&path, content).map_err(ConfigError::Io)
+    }
+
+    /// Get API key for a given source.
+    pub fn get_api_key(&self, source: &Source) -> Option<String> {
+        match source {
+            Source::OpenRouter => self.api_keys.openrouter.clone(),
+            Source::OpenCodeZen => self.api_keys.opencode_zen.clone(),
+            Source::Ollama => None,
+        }
     }
 }
 
@@ -247,7 +325,7 @@ openrouter = "sk-or-test-key"
     fn returns_defaults_when_file_missing() {
         let config = Config::load_from(PathBuf::from("/nonexistent/path/config.toml")).unwrap();
 
-        assert_eq!(config.gateway.port, 8080);
+        assert_eq!(config.gateway.port, 11434); // Ollama-compatible default
         assert_eq!(config.gateway.auto_start, false);
         assert_eq!(config.logging.enabled, true);
         assert_eq!(config.inspector.max_transactions, 1000);
@@ -270,28 +348,28 @@ openrouter = "sk-or-test-key"
 
     #[test]
     fn env_overrides_take_precedence_over_file() {
-        // Clean up any leftover env vars from parallel tests
-        std::env::remove_var("OPENROUTER_API_KEY");
+        // Use spending cap env var (less likely to conflict with other tests)
+        std::env::remove_var("MULTIAI_MONTHLY_CAP");
 
         let dir = tempfile::tempdir().unwrap();
         let config_path = dir.path().join("config.toml");
 
         fs::write(&config_path, r#"
-[api_keys]
-openrouter = "file-key"
+[spending]
+monthly_cap = 100.0
 "#).unwrap();
 
         // Load without env override first
         let config_from_file = Config::load_from(config_path.clone()).unwrap();
-        assert_eq!(config_from_file.api_keys.openrouter, Some("file-key".to_string()));
+        assert_eq!(config_from_file.spending.monthly_cap, 100.0);
 
         // Now set env and verify it overrides
-        std::env::set_var("OPENROUTER_API_KEY", "env-key");
+        std::env::set_var("MULTIAI_MONTHLY_CAP", "200.0");
         let config = Config::load_from(config_path).unwrap().with_env_overrides();
 
-        assert_eq!(config.api_keys.openrouter, Some("env-key".to_string()));
+        assert_eq!(config.spending.monthly_cap, 200.0);
 
-        std::env::remove_var("OPENROUTER_API_KEY");
+        std::env::remove_var("MULTIAI_MONTHLY_CAP");
     }
 
     #[test]
@@ -360,5 +438,62 @@ format = "{}"
             let config = Config::load_from(config_path).unwrap();
             assert_eq!(config.logging.format, expected);
         }
+    }
+
+    #[test]
+    fn get_api_key_returns_openrouter_key() {
+        use crate::scanner::Source;
+
+        let config = Config {
+            api_keys: ApiKeysConfig {
+                openrouter: Some("sk-or-test".to_string()),
+                opencode_zen: None,
+            },
+            ..Config::default()
+        };
+
+        assert_eq!(config.get_api_key(&Source::OpenRouter), Some("sk-or-test".to_string()));
+    }
+
+    #[test]
+    fn get_api_key_returns_opencode_zen_key() {
+        use crate::scanner::Source;
+
+        let config = Config {
+            api_keys: ApiKeysConfig {
+                openrouter: None,
+                opencode_zen: Some("zen-key".to_string()),
+            },
+            ..Config::default()
+        };
+
+        assert_eq!(config.get_api_key(&Source::OpenCodeZen), Some("zen-key".to_string()));
+    }
+
+    #[test]
+    fn get_api_key_returns_none_for_ollama() {
+        use crate::scanner::Source;
+
+        let config = Config {
+            api_keys: ApiKeysConfig {
+                openrouter: Some("key".to_string()),
+                opencode_zen: Some("key".to_string()),
+            },
+            ..Config::default()
+        };
+
+        assert_eq!(config.get_api_key(&Source::Ollama), None);
+    }
+
+    #[test]
+    fn load_with_env_applies_spending_overrides() {
+        // Test with spending cap env var (less likely to conflict with other tests)
+        std::env::set_var("MULTIAI_DAILY_CAP", "99.99");
+
+        let config = Config::load_with_env();
+
+        assert_eq!(config.spending.daily_cap, 99.99);
+
+        std::env::remove_var("MULTIAI_DAILY_CAP");
     }
 }

@@ -85,7 +85,7 @@ fn format_compact(tx: &CapturedTransaction, model: &str, path: &str) -> String {
 fn format_verbose(tx: &CapturedTransaction, model: &str, path: &str) -> String {
     let separator = "────────────────────────────────────────";
     let status = tx.response.as_ref().map(|r| r.status).unwrap_or(0);
-    let status_text = if status >= 200 && status < 300 { "OK" } else { "ERROR" };
+    let status_text = if (200..300).contains(&status) { "OK" } else { "ERROR" };
 
     let duration = format_duration(tx.timing.total_ms);
     let ttfb = tx.timing.ttfb_ms
