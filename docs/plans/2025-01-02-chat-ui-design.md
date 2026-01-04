@@ -1,7 +1,7 @@
 # FreeTier Chat UI Design
 
 **Date:** 2025-01-02
-**Status:** Approved
+**Status:** Completed (renamed to MultiAI)
 **Target:** $2 Mac App Store app + Web UI served by gateway
 
 ## Overview

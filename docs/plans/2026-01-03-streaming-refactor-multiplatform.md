@@ -1,7 +1,7 @@
 # Streaming Architecture Refactor + Multi-Platform
 
 **Date:** 2026-01-03
-**Status:** Approved
+**Status:** Completed (streaming), Deferred (multi-platform)
 **Priority:** Debuggability (production debugging)
 
 ## Overview
@@ -181,11 +181,15 @@ frontend/src/
 
 ## Success Criteria
 
-- [ ] All streaming tests pass (existing 43 + new)
-- [ ] Abort actually stops in-flight requests
-- [ ] Retry works for transient failures
-- [ ] Circuit breaker protects against rate limits
-- [ ] Telemetry visible in Vercel dashboard
-- [ ] Chrome extension installable and functional
-- [ ] Windows MSI builds and installs
-- [ ] No regressions in macOS DMG
+- [x] All streaming tests pass (existing 43 + new)
+- [x] Abort actually stops in-flight requests
+- [x] Retry works for transient failures
+- [x] Circuit breaker protects against rate limits
+- [ ] ~~Telemetry visible in Vercel dashboard~~ (Removed from scope)
+- [ ] ~~Chrome extension installable and functional~~ (Removed from scope)
+- [ ] ~~Windows MSI builds and installs~~ (Deferred)
+- [x] No regressions in macOS DMG
+
+## Notes
+
+**Deferred:** Chrome extension and Windows MSI builds were removed from scope per user request. The streaming architecture is complete and working in the desktop app.

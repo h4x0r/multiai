@@ -86,9 +86,12 @@ External Tools (Cursor, Continue, etc.)
 - [x] Streaming SSE support
 - [x] Side-by-side comparison UI
 - [x] Resilience layer (retry, circuit breaker)
-- [ ] Refactor frontend to use new streaming hook
-- [ ] Remove unused Chrome extension code
-- [ ] Remove unused Vercel telemetry code
+- [x] Frontend streaming hook (`useStreamingChat`)
+- [x] MCP server for Claude Desktop integration
+- [x] Desktop app (Tauri DMG for macOS)
+- [x] Document upload (PDF, DOCX, TXT)
+- [x] Chat export (PDF, DOCX, Markdown)
+- [x] LLM-as-judge quality scoring
 
 ## Removed from Scope
 
